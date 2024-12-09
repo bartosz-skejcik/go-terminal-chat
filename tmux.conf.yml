@@ -1,0 +1,10 @@
+session_name: gtc
+# Minimal configuration with default session name
+windows:
+  - name: neovim
+    panes:
+      - initial_command: nvim .
+
+  - name: terminal
+    panes:
+      - initial_command:

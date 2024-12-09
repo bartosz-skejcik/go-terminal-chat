@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bartosz-skejcik/go-terminal-chat/internal/helper"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gempir/go-twitch-irc/v4"
 )
@@ -69,6 +71,9 @@ func (c *Chat) ShowMessage(message twitch.PrivateMessage) {
 
 	userName := c.userStyle.Foreground(lipgloss.Color(userColor)).Render(message.User.DisplayName) // Use DisplayName for better user experience
 
+	// Format the reply message
+	reply := formatReply(message)
+
 	if c.logMessages {
 		c.WriteMessageToFile(message)
 	}
@@ -79,12 +84,43 @@ func (c *Chat) ShowMessage(message twitch.PrivateMessage) {
 		c.messageStyle = lipgloss.NewStyle().Padding(0, 1) //Light Pink
 	}
 
-	fmt.Printf(" %s%s%s:%s\n\n", timestamp, badges, userName, c.messageStyle.Render(message.Message))
+	messageBody := helper.FormatMessageBody(message.Message)
+
+	if message.Tags["reply-parent-msg-id"] != "" {
+		pattern := `@\w{3,} |@\w+`
+
+		re := regexp.MustCompile(pattern)
+
+		messageBody = re.ReplaceAllString(messageBody, "")
+	}
+
+	fmt.Printf(" %s%s%s%s:%s\n\n", reply, timestamp, badges, userName, c.messageStyle.Render(messageBody))
+}
+
+func formatReply(message twitch.PrivateMessage) string {
+	// Format the reply message
+	reply := ""
+	// message.Tags is: map[string]string
+	// message.Tags["reply-parent-display-name"] is the display name of the user being replied to
+	// message.Tags["reply-parent-msg-body"] is the message being replied to
+
+	// add lipgloss style to the header
+	replyStyles := lipgloss.NewStyle().Foreground(lipgloss.Color("#737373")).Bold(true)
+
+	if message.Tags["reply-parent-user-id"] != "" {
+		header := fmt.Sprintf("\n %s Replying to %s: \n", "┃", message.Tags["reply-parent-display-name"])
+		formattedBody := helper.FormatMessageBody(message.Tags["reply-parent-msg-body"])
+
+		body := fmt.Sprintf(" %s %s", "┃", formattedBody)
+
+		reply = replyStyles.Render(header+body) + "\n\n  "
+	}
+	return reply
 }
 
 func formatBadges(message twitch.PrivateMessage, c Chat) string {
 
-	badges := ""
+	var badges string
 
 	for badgeKey, badgeLevel := range message.User.Badges {
 		// Split the badge key to get the base badge name
